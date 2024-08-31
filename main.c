@@ -6,6 +6,7 @@
 #include <dirent.h>
 
 static int test;
+static int maxdepth = 10;
 
 static int ends_with(const char *str, const char *suffix)
 {
@@ -149,11 +150,17 @@ static char *filename_format(const char *in, int nth)
 	return start;
 }
 
-static void handle_dir(char *path, char *new, int nth)
+static void handle_dir(char *path, int nth, int depth)
 {
 	int len;
 	DIR *dp;
 	struct dirent *ep;
+
+	if(depth > maxdepth)
+	{
+		return;
+	}
+
 	if(!(dp = opendir(path)))
 	{
 		return;
@@ -161,6 +168,8 @@ static void handle_dir(char *path, char *new, int nth)
 
 	while((ep = readdir(dp)))
 	{
+		char new[2048];
+
 		if(strcmp(ep->d_name, ".") == 0 ||
 			strcmp(ep->d_name, "..") == 0)
 		{
@@ -176,7 +185,7 @@ static void handle_dir(char *path, char *new, int nth)
 
 		if(strcmp(path, new) != 0)
 		{
-			printf("Renaming %s to %s\n", path, new);
+			printf("Renaming \"%s\" to \"%s\"\n", path, new);
 			if(!test)
 			{
 				if(rename(path, new))
@@ -188,7 +197,7 @@ static void handle_dir(char *path, char *new, int nth)
 
 		if(ep->d_type == DT_DIR)
 		{
-			handle_dir(new, new, nth);
+			handle_dir(test ? path : new, nth, depth + 1);
 		}
 
 		path[len] = '\0';
@@ -197,42 +206,33 @@ static void handle_dir(char *path, char *new, int nth)
 	closedir(dp);
 }
 
+static void printhelp(void)
+{
+	fprintf(stderr, "Usage: ./autorenamer path nth depth [test]\n"
+			"AutoRenamer is a tool that recursively renames all files and directories to a specific format\n"
+			"nth: which part of the filename is the episode number (0 based index)\n"
+			"maxdepth: how many directories deep should be affected (0 = subdirs, 1 = subsubdirs etc.)\n"
+			"test: if parameter is present, only shows what would be renamed\n");
+}
+
 int main(int argc, char **argv)
 {
 	int nth = 0;
 	int len;
-	char path[2048], new[2048];
-	if(argc < 2)
+	char path[2048];
+	if(argc < 4)
 	{
-		fprintf(stderr, "Usage: ./autorenamer path [nth-number] [test]\n"
-				"AutoRenamer is a tool that recursively renames all files and directories to a specific format\n");
+		printhelp();
 		return 0;
 	}
 
-	if(argc == 3)
+	if(argc >= 5 && strcmp(argv[4], "test") == 0)
 	{
-		if(strcmp(argv[2], "test") == 0)
-		{
-			test = 1;
-		}
-		else
-		{
-			nth = atoi(argv[2]);
-		}
+		test = 1;
 	}
-	else if(argc == 4)
-	{
-		if(strcmp(argv[2], "test") == 0)
-		{
-			test = 1;
-			nth = atoi(argv[3]);
-		}
-		else if(strcmp(argv[3], "test") == 0)
-		{
-			test = 1;
-			nth = atoi(argv[2]);
-		}
-	}
+
+	nth = atoi(argv[2]);
+	maxdepth = atoi(argv[3]);
 
 	strcpy(path, argv[1]);
 	len = strlen(path);
@@ -241,6 +241,6 @@ int main(int argc, char **argv)
 		path[len - 1] = '\0';
 	}
 
-	handle_dir(path, new, nth);
+	handle_dir(path, nth, 0);
 	return 0;
 }
